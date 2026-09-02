@@ -1,355 +1,147 @@
-﻿import express from "express";
-import cors from "cors";
+import express, { type Request, type Response } from 'express';
+import cors from 'cors';
 
 import {
   addDocument,
   listDocuments,
+  getDocument,
   searchDocuments,
   createClaim,
   listClaims,
-  verifyDocument
-} from "./workspace.js";
-
-import {
-  apa7,
-  vancouver
-} from "./citations.js";
-
-import {
-  askResearch
-} from "./ai.js";
-
-import {
-  extractText
-} from "./extractor.js";
+  verifyDocument,
+  setDocumentVerification,
+} from '../services/workspace.js';
+import { apa7, vancouver, createCitationRecord } from '../services/citations.js';
+import { askResearch } from '../services/ai.js';
+import { extractText } from '../services/extractor.js';
+import { createEvidenceHandoff } from '../services/evidenceIntegration.js';
 
 export function createResearchRouter() {
+  const router = express.Router();
+  router.use(express.json({ limit: '30mb' }));
 
-  const router =
-    express.Router();
+  router.get('/documents', (_req, res) => {
+    return res.json({ success: true, documents: listDocuments() });
+  });
 
-  router.use(
-    express.json({
-      limit: "30mb"
-    })
-  );
+  router.get('/documents/:id', (req, res) => {
+    const document = getDocument(req.params.id);
+    if (!document) return res.status(404).json({ success: false, error: 'Document not found' });
+    return res.json({ success: true, document });
+  });
 
-  router.get(
-    "/documents",
-    (_, res) => {
-
-      res.json({
+  router.post('/documents', (req, res) => {
+    try {
+      const { fileName, mimeType, sourceType, text } = req.body ?? {};
+      if (typeof fileName !== 'string' || !fileName.trim() || typeof text !== 'string' || !text.trim()) {
+        return res.status(400).json({ success: false, error: 'fileName and text are required' });
+      }
+      return res.status(201).json({
         success: true,
-        documents:
-          listDocuments()
+        document: addDocument({ fileName, mimeType, sourceType, text }),
       });
+    } catch (error) {
+      return res.status(400).json({ success: false, error: error instanceof Error ? error.message : 'Document error' });
     }
-  );
+  });
 
-  router.post(
-    "/documents",
-    (req, res) => {
+  router.get('/search', (req, res) => {
+    const query = String(req.query.q ?? '').trim();
+    if (!query) return res.status(400).json({ success: false, error: 'q is required' });
+    const rawIds = req.query.documentIds;
+    const documentIds = Array.isArray(rawIds)
+      ? rawIds.map(String)
+      : typeof rawIds === 'string'
+        ? rawIds.split(',').map(item => item.trim()).filter(Boolean)
+        : undefined;
+    return res.json({ success: true, results: searchDocuments(query, documentIds) });
+  });
 
-      try {
-
-        const {
-          fileName,
-          mimeType,
-          sourceType,
-          text
-        } = req.body;
-
-        if (
-          !fileName ||
-          typeof text !== "string"
-        ) {
-
-          return res.status(400)
-            .json({
-              success: false,
-              error:
-                "fileName and text are required"
-            });
-        }
-
-        return res.json({
-          success: true,
-          document:
-            addDocument({
-              fileName,
-              mimeType,
-              sourceType,
-              text
-            })
-        });
-
-      } catch (error) {
-
-        return res.status(400)
-          .json({
-            success: false,
-            error:
-              error instanceof Error
-                ? error.message
-                : "Document error"
-          });
+  router.post('/ask', async (req, res) => {
+    try {
+      const question = String(req.body?.question ?? '').trim();
+      const documentIds = req.body?.documentIds;
+      if (!question || !Array.isArray(documentIds) || documentIds.some((id: unknown) => typeof id !== 'string')) {
+        return res.status(400).json({ success: false, error: 'question and documentIds are required' });
       }
+      return res.json({ success: true, result: await askResearch(question, documentIds) });
+    } catch (error) {
+      return res.status(502).json({ success: false, error: error instanceof Error ? error.message : 'Research AI failed' });
     }
-  );
+  });
 
-  router.get(
-    "/search",
-    (req, res) => {
+  router.post('/citation', (req, res) => {
+    const metadata = req.body?.metadata;
+    const style = req.body?.style === 'vancouver' ? 'vancouver' : 'apa7';
+    if (!metadata || typeof metadata.title !== 'string' || !metadata.title.trim() || !Array.isArray(metadata.authors)) {
+      return res.status(400).json({ success: false, error: 'metadata.title and metadata.authors are required' });
+    }
+    const record = createCitationRecord(metadata);
+    const citation = style === 'vancouver' ? vancouver(record) : apa7(record);
+    return res.json({ success: true, style, citation, record });
+  });
 
-      const q =
-        String(
-          req.query.q || ""
-        ).trim();
+  router.post('/claims', (req, res) => {
+    try {
+      return res.status(201).json({ success: true, claim: createClaim(req.body) });
+    } catch (error) {
+      return res.status(400).json({ success: false, error: error instanceof Error ? error.message : 'Claim error' });
+    }
+  });
 
-      if (!q) {
+  router.get('/claims', (_req, res) => res.json({ success: true, claims: listClaims() }));
 
-        return res.status(400)
-          .json({
-            success: false,
-            error:
-              "q is required"
-          });
+  router.post('/documents/:id/verify', (req, res) => {
+    try {
+      return res.json({ success: true, document: verifyDocument(req.params.id) });
+    } catch (error) {
+      return res.status(404).json({ success: false, error: error instanceof Error ? error.message : 'Document not found' });
+    }
+  });
+
+  router.post('/documents/:id/verification', (req, res) => {
+    try {
+      const status = req.body?.status;
+      if (!['UNVERIFIED', 'AI_CANDIDATE', 'HUMAN_VERIFIED', 'REJECTED'].includes(status)) {
+        return res.status(400).json({ success: false, error: 'Invalid verification status' });
       }
-
-      return res.json({
-        success: true,
-        results:
-          searchDocuments(q)
-      });
+      return res.json({ success: true, document: setDocumentVerification(req.params.id, status) });
+    } catch (error) {
+      return res.status(404).json({ success: false, error: error instanceof Error ? error.message : 'Document not found' });
     }
-  );
+  });
 
-  router.post(
-    "/ask",
-    async (req, res) => {
-
-      try {
-
-        const {
-          question,
-          documentIds
-        } = req.body;
-
-        if (
-          !question ||
-          !Array.isArray(
-            documentIds
-          )
-        ) {
-
-          return res.status(400)
-            .json({
-              success: false,
-              error:
-                "question and documentIds are required"
-            });
-        }
-
-        return res.json({
-          success: true,
-          result:
-            await askResearch(
-              question,
-              documentIds
-            )
-        });
-
-      } catch (error) {
-
-        return res.status(502)
-          .json({
-            success: false,
-            error:
-              error instanceof Error
-                ? error.message
-                : "Research AI failed"
-          });
+  router.post('/extract', async (req, res) => {
+    try {
+      if (typeof req.body?.filePath !== 'string' || !req.body.filePath.trim()) {
+        return res.status(400).json({ success: false, error: 'filePath is required' });
       }
+      return res.json({ success: true, extracted: await extractText(req.body.filePath) });
+    } catch (error) {
+      return res.status(400).json({ success: false, error: error instanceof Error ? error.message : 'Extraction failed' });
     }
-  );
+  });
 
-  router.post(
-    "/citation",
-    (req, res) => {
-
-      const {
-        metadata,
-        style = "apa7"
-      } = req.body;
-
-      if (
-        !metadata ||
-        !metadata.title
-      ) {
-
-        return res.status(400)
-          .json({
-            success: false,
-            error:
-              "metadata.title is required"
-          });
-      }
-
-      const citation =
-        style === "vancouver"
-          ? vancouver(metadata)
-          : apa7(metadata);
-
-      return res.json({
-        success: true,
-        style,
-        citation,
-        verification:
-          metadata.verified === true
-            ? "verified"
-            : "candidate/unverified"
-      });
+  router.post('/handoff', (req, res) => {
+    try {
+      const handoff = createEvidenceHandoff(req.body);
+      return res.json({ success: true, handoff });
+    } catch (error) {
+      return res.status(400).json({ success: false, error: error instanceof Error ? error.message : 'Evidence handoff failed' });
     }
-  );
-
-  router.post(
-    "/claims",
-    (req, res) => {
-
-      try {
-
-        return res.json({
-          success: true,
-          claim:
-            createClaim(
-              req.body
-            )
-        });
-
-      } catch (error) {
-
-        return res.status(400)
-          .json({
-            success: false,
-            error:
-              error instanceof Error
-                ? error.message
-                : "Claim error"
-          });
-      }
-    }
-  );
-
-  router.get(
-    "/claims",
-    (_, res) => {
-
-      res.json({
-        success: true,
-        claims:
-          listClaims()
-      });
-    }
-  );
-
-  router.post(
-    "/documents/:id/verify",
-    (req, res) => {
-
-      try {
-
-        return res.json({
-          success: true,
-          document:
-            verifyDocument(
-              req.params.id
-            )
-        });
-
-      } catch (error) {
-
-        return res.status(404)
-          .json({
-            success: false,
-            error:
-              error instanceof Error
-                ? error.message
-                : "Document not found"
-          });
-      }
-    }
-  );
-
-  router.post(
-    "/extract",
-    async (req, res) => {
-
-      try {
-
-        if (
-          typeof req.body.filePath !==
-          "string"
-        ) {
-
-          return res.status(400)
-            .json({
-              success: false,
-              error:
-                "filePath is required"
-            });
-        }
-
-        const extracted =
-          await extractText(
-            req.body.filePath
-          );
-
-        return res.json({
-          success: true,
-          extracted
-        });
-
-      } catch (error) {
-
-        return res.status(400)
-          .json({
-            success: false,
-            error:
-              error instanceof Error
-                ? error.message
-                : "Extraction failed"
-          });
-      }
-    }
-  );
+  });
 
   return router;
 }
 
 export function createApp() {
-
-  const app =
-    express();
-
+  const app = express();
   app.use(cors());
-
-  app.get(
-    "/health",
-    (_, res) => {
-
-      res.json({
-        status: "ok",
-        service:
-          "academic-research-engine",
-        version: "1.0.0"
-      });
-    }
-  );
-
-  app.use(
-    "/api/research",
-    createResearchRouter()
-  );
-
+  app.get('/health', (_req, res) => res.json({
+    status: 'ok',
+    service: 'academic-research-engine',
+    version: '1.0.0',
+  }));
+  app.use('/api/research', createResearchRouter());
   return app;
 }
