@@ -1,15 +1,33 @@
-﻿export type DocumentSourceType =
-  | "pdf"
-  | "docx"
-  | "txt"
-  | "markdown"
-  | "web"
-  | "unknown";
+export type DocumentSourceType =
+  | 'pdf'
+  | 'docx'
+  | 'txt'
+  | 'markdown'
+  | 'web'
+  | 'unknown';
 
 export type VerificationStatus =
-  | "unverified"
-  | "candidate"
-  | "verified";
+  | 'UNVERIFIED'
+  | 'AI_CANDIDATE'
+  | 'HUMAN_VERIFIED'
+  | 'REJECTED';
+
+export type EvidenceStatus =
+  | 'AI_CANDIDATE'
+  | 'HUMAN_VERIFIED'
+  | 'MANUAL'
+  | 'REJECTED';
+
+export type EvidenceLocation = {
+  documentId: string;
+  fileName: string;
+  page?: string;
+  section?: string;
+  table?: string;
+  figure?: string;
+  location: string;
+  quote: string;
+};
 
 export type ResearchDocument = {
   id: string;
@@ -19,13 +37,8 @@ export type ResearchDocument = {
   text: string;
   createdAt: string;
   verification: VerificationStatus;
-};
-
-export type EvidenceLocation = {
-  documentId: string;
-  fileName: string;
-  location: string;
-  quote: string;
+  wordCount: number;
+  estimatedPages: number;
 };
 
 export type EvidenceClaim = {
@@ -34,7 +47,7 @@ export type EvidenceClaim = {
   documentId?: string;
   location?: string;
   quote?: string;
-  status: "candidate" | "verified" | "rejected";
+  status: 'candidate' | 'verified' | 'rejected';
   createdAt: string;
 };
 
@@ -42,7 +55,7 @@ export type ResearchAnswer = {
   answer: string;
   evidence: EvidenceLocation[];
   uncertainties: string[];
-  mode: "ai" | "fallback";
+  mode: 'ai' | 'fallback';
 };
 
 export type CitationMetadata = {
@@ -63,4 +76,22 @@ export type CitationRecord = CitationMetadata & {
   id: string;
   createdAt: string;
   status: VerificationStatus;
+};
+
+export type ResearchEngineHealth = {
+  service: 'academic-research-engine';
+  version: string;
+  status: 'ok' | 'degraded';
+  capabilities: string[];
+};
+
+export type EvidenceHandoff = {
+  contractVersion: '1.0.0';
+  source: 'academic-research-engine';
+  document: ResearchDocument;
+  evidence: EvidenceLocation[];
+  citation?: {
+    apa7?: string;
+    vancouver?: string;
+  };
 };
