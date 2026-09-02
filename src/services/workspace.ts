@@ -1,9 +1,9 @@
-﻿import crypto from "node:crypto";
+import crypto from 'node:crypto';
 import type {
   ResearchDocument,
   EvidenceClaim,
-  DocumentSourceType
-} from "../types/index.js";
+  DocumentSourceType,
+} from '../types/index.js';
 
 const documents = new Map<string, ResearchDocument>();
 const claims = new Map<string, EvidenceClaim>();
@@ -13,121 +13,95 @@ export function addDocument(input: {
   mimeType?: string;
   sourceType?: DocumentSourceType;
   text: string;
-}) {
+}): ResearchDocument {
+  const fileName = String(input.fileName ?? '').trim();
+  const text = String(input.text ?? '');
 
-  if (!input.fileName) {
-    throw new Error("fileName is required");
-  }
+  if (!fileName) throw new Error('fileName is required');
+  if (!text.trim()) throw new Error('Document text cannot be empty');
 
-  if (!input.text.trim()) {
-    throw new Error("Document text cannot be empty");
-  }
+  const id = crypto.randomUUID();
+  const words = text.trim().split(/\s+/).filter(Boolean);
 
   const document: ResearchDocument = {
-    id: crypto.randomUUID(),
-    fileName: input.fileName,
+    id,
+    fileName,
     mimeType: input.mimeType,
-    sourceType: input.sourceType ?? "unknown",
-    text: input.text,
+    sourceType: input.sourceType ?? inferSourceType(fileName),
+    text,
     createdAt: new Date().toISOString(),
-    verification: "unverified"
+    verification: 'UNVERIFIED',
+    wordCount: words.length,
+    estimatedPages: Math.max(1, Math.ceil(words.length / 500)),
   };
 
-  documents.set(document.id, document);
-
-  return document;
+  documents.set(id, document);
+  return { ...document };
 }
 
-export function getDocument(id: string) {
-  return documents.get(id);
+export function getDocument(id: string): ResearchDocument | undefined {
+  const document = documents.get(id);
+  return document ? { ...document } : undefined;
 }
 
 export function listDocuments() {
-
   return [...documents.values()].map(document => ({
     id: document.id,
     fileName: document.fileName,
     mimeType: document.mimeType,
     sourceType: document.sourceType,
     characters: document.text.length,
+    wordCount: document.wordCount,
+    estimatedPages: document.estimatedPages,
     createdAt: document.createdAt,
-    verification: document.verification
+    verification: document.verification,
   }));
 }
 
-export function searchDocuments(
-  query: string,
-  documentIds?: string[]
-) {
-
-  const terms = query
+export function searchDocuments(query: string, documentIds?: string[]) {
+  const terms = String(query ?? '')
     .toLowerCase()
     .split(/\s+/)
     .map(term => term.trim())
     .filter(Boolean);
 
-  if (!terms.length) {
-    return [];
-  }
+  if (!terms.length) return [];
 
-  const allowed =
-    documentIds?.length
-      ? new Set(documentIds)
-      : undefined;
-
+  const allowed = documentIds?.length ? new Set(documentIds) : undefined;
   const results: Array<{
     documentId: string;
     fileName: string;
     location: string;
     quote: string;
+    page?: string;
+    section?: string;
   }> = [];
 
   for (const document of documents.values()) {
+    if (allowed && !allowed.has(document.id)) continue;
 
-    if (
-      allowed &&
-      !allowed.has(document.id)
-    ) {
-      continue;
-    }
-
-    const lower =
-      document.text.toLowerCase();
-
+    const lower = document.text.toLowerCase();
     for (const term of terms) {
-
-      let position =
-        lower.indexOf(term);
-
+      let position = lower.indexOf(term);
       let count = 0;
 
-      while (
-        position >= 0 &&
-        count < 10
-      ) {
+      while (position >= 0 && count < 10) {
+        const start = Math.max(0, position - 220);
+        const end = Math.min(document.text.length, position + 600);
+        const before = document.text.slice(0, position);
+        const lineNumber = before.split(/\r?\n/).length;
+        const estimatedPage = Math.max(1, Math.ceil(lineNumber / 40));
 
         results.push({
           documentId: document.id,
           fileName: document.fileName,
-          location:
-            `character:${position}`,
-          quote:
-            document.text.slice(
-              Math.max(0, position - 220),
-              Math.min(
-                document.text.length,
-                position + 600
-              )
-            )
+          location: `character:${position}`,
+          quote: document.text.slice(start, end),
+          page: String(estimatedPage),
         });
 
-        position =
-          lower.indexOf(
-            term,
-            position + 1
-          );
-
-        count++;
+        position = lower.indexOf(term, position + 1);
+        count += 1;
       }
     }
   }
@@ -136,46 +110,43 @@ export function searchDocuments(
 }
 
 export function createClaim(
-  input: Omit<
-    EvidenceClaim,
-    "id" | "createdAt"
-  >
-) {
+  input: Omit<EvidenceClaim, 'id' | 'createdAt'>,
+): EvidenceClaim {
+  if (!input.claim?.trim()) throw new Error('claim is required');
 
   const claim: EvidenceClaim = {
     ...input,
+    claim: input.claim.trim(),
     id: crypto.randomUUID(),
-    createdAt:
-      new Date().toISOString()
+    createdAt: new Date().toISOString(),
   };
 
-  claims.set(
-    claim.id,
-    claim
-  );
-
-  return claim;
+  claims.set(claim.id, claim);
+  return { ...claim };
 }
 
-export function listClaims() {
-  return [...claims.values()];
+export function listClaims(): EvidenceClaim[] {
+  return [...claims.values()].map(claim => ({ ...claim }));
 }
 
-export function verifyDocument(
-  id: string
-) {
+export function verifyDocument(id: string): ResearchDocument {
+  const document = documents.get(id);
+  if (!document) throw new Error('Document not found');
 
-  const document =
-    documents.get(id);
+  const verified: ResearchDocument = {
+    ...document,
+    verification: 'HUMAN_VERIFIED',
+  };
 
-  if (!document) {
-    throw new Error(
-      "Document not found"
-    );
-  }
+  documents.set(id, verified);
+  return { ...verified };
+}
 
-  document.verification =
-    "verified";
-
-  return document;
+function inferSourceType(fileName: string): DocumentSourceType {
+  const lower = fileName.toLowerCase();
+  if (lower.endsWith('.pdf')) return 'pdf';
+  if (lower.endsWith('.docx')) return 'docx';
+  if (lower.endsWith('.md')) return 'markdown';
+  if (lower.endsWith('.txt') || lower.endsWith('.rtf')) return 'txt';
+  return 'unknown';
 }
