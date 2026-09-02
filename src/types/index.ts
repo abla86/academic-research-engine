@@ -1,22 +1,7 @@
-export type DocumentSourceType =
-  | 'pdf'
-  | 'docx'
-  | 'txt'
-  | 'markdown'
-  | 'web'
-  | 'unknown';
+export type DocumentSourceType = 'pdf' | 'docx' | 'txt' | 'markdown' | 'web' | 'unknown';
 
-export type VerificationStatus =
-  | 'UNVERIFIED'
-  | 'AI_CANDIDATE'
-  | 'HUMAN_VERIFIED'
-  | 'REJECTED';
-
-export type EvidenceStatus =
-  | 'AI_CANDIDATE'
-  | 'HUMAN_VERIFIED'
-  | 'MANUAL'
-  | 'REJECTED';
+export type VerificationStatus = 'UNVERIFIED' | 'AI_CANDIDATE' | 'HUMAN_VERIFIED' | 'REJECTED';
+export type EvidenceStatus = 'AI_CANDIDATE' | 'HUMAN_VERIFIED' | 'MANUAL' | 'REJECTED';
 
 export type EvidenceLocation = {
   documentId: string;
