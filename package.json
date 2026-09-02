@@ -1,9 +1,10 @@
-﻿{
+{
   "name": "@abla86/academic-research-engine",
-  "version": "1.0.0",
-  "description": "Standalone reusable academic research, source-grounding and citation engine.",
+  "version": "2.0.0",
+  "description": "Standalone reusable academic research engine for source-grounded research, evidence provenance and integration with Evidence Appraisal applications.",
   "type": "module",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "dev": "tsx src/server.ts",
     "build": "tsc",
@@ -12,7 +13,7 @@
     "test": "node --import tsx --test tests/*.test.ts"
   },
   "dependencies": {
-    "@google/genai": "^2.4.0",
+    "@google/genai": "^2.21.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
