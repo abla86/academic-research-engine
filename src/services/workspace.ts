@@ -20,11 +20,9 @@ export function addDocument(input: {
   if (!fileName) throw new Error('fileName is required');
   if (!text.trim()) throw new Error('Document text cannot be empty');
 
-  const id = crypto.randomUUID();
   const words = text.trim().split(/\s+/).filter(Boolean);
-
   const document: ResearchDocument = {
-    id,
+    id: crypto.randomUUID(),
     fileName,
     mimeType: input.mimeType,
     sourceType: input.sourceType ?? inferSourceType(fileName),
@@ -35,13 +33,13 @@ export function addDocument(input: {
     estimatedPages: Math.max(1, Math.ceil(words.length / 500)),
   };
 
-  documents.set(id, document);
-  return { ...document };
+  documents.set(document.id, document);
+  return cloneDocument(document);
 }
 
 export function getDocument(id: string): ResearchDocument | undefined {
   const document = documents.get(id);
-  return document ? { ...document } : undefined;
+  return document ? cloneDocument(document) : undefined;
 }
 
 export function listDocuments() {
@@ -88,8 +86,7 @@ export function searchDocuments(query: string, documentIds?: string[]) {
       while (position >= 0 && count < 10) {
         const start = Math.max(0, position - 220);
         const end = Math.min(document.text.length, position + 600);
-        const before = document.text.slice(0, position);
-        const lineNumber = before.split(/\r?\n/).length;
+        const lineNumber = document.text.slice(0, position).split(/\r?\n/).length;
         const estimatedPage = Math.max(1, Math.ceil(lineNumber / 40));
 
         results.push({
@@ -100,7 +97,7 @@ export function searchDocuments(query: string, documentIds?: string[]) {
           page: String(estimatedPage),
         });
 
-        position = lower.indexOf(term, position + 1);
+        position = lower.indexOf(term, position + Math.max(1, term.length));
         count += 1;
       }
     }
@@ -112,17 +109,23 @@ export function searchDocuments(query: string, documentIds?: string[]) {
 export function createClaim(
   input: Omit<EvidenceClaim, 'id' | 'createdAt'>,
 ): EvidenceClaim {
-  if (!input.claim?.trim()) throw new Error('claim is required');
+  const claim = String(input.claim ?? '').trim();
+  if (!claim) throw new Error('claim is required');
 
-  const claim: EvidenceClaim = {
+  const status = input.status;
+  if (!['candidate', 'verified', 'rejected'].includes(status)) {
+    throw new Error('claim status must be candidate, verified, or rejected');
+  }
+
+  const record: EvidenceClaim = {
     ...input,
-    claim: input.claim.trim(),
+    claim,
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
   };
 
-  claims.set(claim.id, claim);
-  return { ...claim };
+  claims.set(record.id, record);
+  return { ...record };
 }
 
 export function listClaims(): EvidenceClaim[] {
@@ -139,7 +142,23 @@ export function verifyDocument(id: string): ResearchDocument {
   };
 
   documents.set(id, verified);
-  return { ...verified };
+  return cloneDocument(verified);
+}
+
+export function setDocumentVerification(
+  id: string,
+  status: ResearchDocument['verification'],
+): ResearchDocument {
+  const document = documents.get(id);
+  if (!document) throw new Error('Document not found');
+
+  const updated: ResearchDocument = { ...document, verification: status };
+  documents.set(id, updated);
+  return cloneDocument(updated);
+}
+
+function cloneDocument(document: ResearchDocument): ResearchDocument {
+  return { ...document };
 }
 
 function inferSourceType(fileName: string): DocumentSourceType {
