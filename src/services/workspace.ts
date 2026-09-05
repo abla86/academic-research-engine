@@ -1,9 +1,5 @@
 import crypto from 'node:crypto';
-import type {
-  ResearchDocument,
-  EvidenceClaim,
-  DocumentSourceType,
-} from '../types/index.js';
+import type { ResearchDocument, EvidenceClaim, DocumentSourceType } from '../types/index.js';
 
 const documents = new Map<string, ResearchDocument>();
 const claims = new Map<string, EvidenceClaim>();
@@ -16,7 +12,6 @@ export function addDocument(input: {
 }): ResearchDocument {
   const fileName = String(input.fileName ?? '').trim();
   const text = String(input.text ?? '');
-
   if (!fileName) throw new Error('fileName is required');
   if (!text.trim()) throw new Error('Document text cannot be empty');
 
@@ -32,7 +27,6 @@ export function addDocument(input: {
     wordCount: words.length,
     estimatedPages: Math.max(1, Math.ceil(words.length / 500)),
   };
-
   documents.set(document.id, document);
   return cloneDocument(document);
 }
@@ -57,58 +51,39 @@ export function listDocuments() {
 }
 
 export function searchDocuments(query: string, documentIds?: string[]) {
-  const terms = String(query ?? '')
-    .toLowerCase()
-    .split(/\s+/)
-    .map(term => term.trim())
-    .filter(Boolean);
-
+  const terms = String(query ?? '').toLowerCase().split(/\s+/).map(term => term.trim()).filter(Boolean);
   if (!terms.length) return [];
 
   const allowed = documentIds?.length ? new Set(documentIds) : undefined;
-  const results: Array<{
-    documentId: string;
-    fileName: string;
-    location: string;
-    quote: string;
-    page?: string;
-    section?: string;
-  }> = [];
+  const results: Array<{ documentId: string; fileName: string; location: string; quote: string; page?: string; section?: string }> = [];
 
   for (const document of documents.values()) {
     if (allowed && !allowed.has(document.id)) continue;
-
     const lower = document.text.toLowerCase();
+
     for (const term of terms) {
       let position = lower.indexOf(term);
       let count = 0;
-
       while (position >= 0 && count < 10) {
         const start = Math.max(0, position - 220);
         const end = Math.min(document.text.length, position + 600);
         const lineNumber = document.text.slice(0, position).split(/\r?\n/).length;
-        const estimatedPage = Math.max(1, Math.ceil(lineNumber / 40));
-
         results.push({
           documentId: document.id,
           fileName: document.fileName,
-          location: `character:${position}`,
+          location: 'character:' + position,
           quote: document.text.slice(start, end),
-          page: String(estimatedPage),
+          page: String(Math.max(1, Math.ceil(lineNumber / 40))),
         });
-
         position = lower.indexOf(term, position + Math.max(1, term.length));
         count += 1;
       }
     }
   }
-
   return results.slice(0, 100);
 }
 
-export function createClaim(
-  input: Omit<EvidenceClaim, 'id' | 'createdAt'>,
-): EvidenceClaim {
+export function createClaim(input: Omit<EvidenceClaim, 'id' | 'createdAt'>): EvidenceClaim {
   const claim = String(input.claim ?? '').trim();
   if (!claim) throw new Error('claim is required');
 
@@ -117,13 +92,33 @@ export function createClaim(
     throw new Error('claim status must be candidate, verified, or rejected');
   }
 
+  const documentId = typeof input.documentId === 'string' ? input.documentId.trim() : undefined;
+  const quote = typeof input.quote === 'string' ? input.quote.trim() : undefined;
+
+  if (documentId && !documents.has(documentId)) {
+    throw new Error('claim references an unknown document');
+  }
+
+  if (status === 'verified') {
+    if (!documentId || !quote) throw new Error('verified claims require documentId and quote');
+    const document = documents.get(documentId);
+    if (!document) throw new Error('verified claim references an unknown document');
+    if (document.verification !== 'HUMAN_VERIFIED') {
+      throw new Error('verified claims require a HUMAN_VERIFIED source document');
+    }
+    if (!document.text.includes(quote)) {
+      throw new Error('verified claim quote does not exist verbatim in the referenced document');
+    }
+  }
+
   const record: EvidenceClaim = {
     ...input,
+    documentId,
+    quote,
     claim,
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
   };
-
   claims.set(record.id, record);
   return { ...record };
 }
@@ -133,28 +128,20 @@ export function listClaims(): EvidenceClaim[] {
 }
 
 export function verifyDocument(id: string): ResearchDocument {
-  const document = documents.get(id);
-  if (!document) throw new Error('Document not found');
-
-  const verified: ResearchDocument = {
-    ...document,
-    verification: 'HUMAN_VERIFIED',
-  };
-
-  documents.set(id, verified);
-  return cloneDocument(verified);
+  return setDocumentVerification(id, 'HUMAN_VERIFIED');
 }
 
-export function setDocumentVerification(
-  id: string,
-  status: ResearchDocument['verification'],
-): ResearchDocument {
+export function setDocumentVerification(id: string, status: ResearchDocument['verification']): ResearchDocument {
   const document = documents.get(id);
   if (!document) throw new Error('Document not found');
-
   const updated: ResearchDocument = { ...document, verification: status };
   documents.set(id, updated);
   return cloneDocument(updated);
+}
+
+export function hasVerbatimEvidence(documentId: string, quote: string): boolean {
+  const document = documents.get(documentId);
+  return Boolean(document && quote.trim() && document.text.includes(quote));
 }
 
 function cloneDocument(document: ResearchDocument): ResearchDocument {
