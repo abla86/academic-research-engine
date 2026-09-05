@@ -1,6 +1,6 @@
 {
   "name": "Academic Research Engine",
-  "version": "1.0",
+  "version": "1.0.0",
   "primaryConsumer": "abla86/complete-evidence-appraisal-tool",
   "modes": ["standalone", "embedded", "http", "typescript"],
   "handoff": {

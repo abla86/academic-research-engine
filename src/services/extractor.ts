@@ -14,12 +14,10 @@ export interface ExtractedDocumentContent {
 }
 
 export async function extractText(filePath: string): Promise<ExtractedDocumentContent> {
-  const absolutePath = path.resolve(filePath);
+  const absolutePath = resolveAllowedExtractionPath(filePath);
   const extension = path.extname(absolutePath).toLowerCase();
 
-  if (!await fileExists(absolutePath)) {
-    throw new Error(`File not found: ${filePath}`);
-  }
+  if (!await fileExists(absolutePath)) throw new Error('File not found: ' + filePath);
 
   let sourceType: DocumentSourceType;
   let text = '';
@@ -38,50 +36,49 @@ export async function extractText(filePath: string): Promise<ExtractedDocumentCo
   } else if (extension === '.pdf') {
     sourceType = 'pdf';
     const data = new Uint8Array(await fs.readFile(absolutePath));
-    const pdf = await getDocument({ data, disableWorker: true }).promise;
+    const pdf = await getDocument({ data }).promise;
     estimatedPages = Math.max(1, pdf.numPages);
     const pages: string[] = [];
 
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
       const page = await pdf.getPage(pageNumber);
       const content = await page.getTextContent();
-      const pageText = content.items
-        .map((item: unknown) => {
-          if (typeof item === 'object' && item !== null && 'str' in item) {
-            return typeof (item as { str?: unknown }).str === 'string'
-              ? (item as { str: string }).str
-              : '';
-          }
-          return '';
-        })
-        .join(' ')
-        .replace(/\s{2,}/g, ' ')
-        .trim();
-      if (pageText) pages.push(`[Page ${pageNumber}]\n${pageText}`);
+      const pageText = content.items.map((item: unknown) => {
+        if (typeof item === 'object' && item !== null && 'str' in item) {
+          return typeof (item as { str?: unknown }).str === 'string'
+            ? (item as { str: string }).str
+            : '';
+        }
+        return '';
+      }).join(' ').replace(/\s{2,}/g, ' ').trim();
+
+      if (pageText) pages.push('[Page ' + pageNumber + ']\n' + pageText);
     }
 
     text = pages.join('\n\n').trim();
     isScannedOrImageOnly = text.length < 80;
     ocrNeeded = isScannedOrImageOnly;
   } else {
-    throw new Error(`Unsupported document type: ${extension}`);
+    throw new Error('Unsupported document type: ' + extension);
   }
 
   const normalized = text.replace(/\u0000/g, '').trim();
   const wordCount = normalized ? normalized.split(/\s+/).filter(Boolean).length : 0;
+  if (sourceType !== 'pdf') estimatedPages = Math.max(1, Math.ceil(wordCount / 500));
 
-  if (sourceType !== 'pdf') {
-    estimatedPages = Math.max(1, Math.ceil(wordCount / 500));
+  return { sourceType, text: normalized, wordCount, estimatedPages, isScannedOrImageOnly, ocrNeeded };
+}
+
+function resolveAllowedExtractionPath(filePath: string): string {
+  const root = path.resolve(process.env.RESEARCH_DOCUMENT_ROOT || path.join(process.cwd(), 'documents'));
+  const requested = path.resolve(root, filePath);
+  const relative = path.relative(root, requested);
+
+  if (relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) {
+    throw new Error('filePath must remain inside RESEARCH_DOCUMENT_ROOT');
   }
 
-  return {
-    sourceType,
-    text: normalized,
-    wordCount,
-    estimatedPages,
-    isScannedOrImageOnly,
-    ocrNeeded,
-  };
+  return requested;
 }
 
 async function fileExists(filePath: string): Promise<boolean> {

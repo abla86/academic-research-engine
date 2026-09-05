@@ -11,17 +11,24 @@ function getClient(): GoogleGenAI | null {
   return client;
 }
 
-function normalizeEvidence(value: unknown): EvidenceLocation[] {
+function normalizeEvidence(value: unknown, documents: NonNullable<ReturnType<typeof getDocument>>[]): EvidenceLocation[] {
   if (!Array.isArray(value)) return [];
+  const byId = new Map(documents.map(document => [document.id, document]));
+
   return value.flatMap(item => {
     if (!item || typeof item !== 'object') return [];
     const row = item as Record<string, unknown>;
     if (typeof row.documentId !== 'string' || typeof row.quote !== 'string') return [];
+
+    const document = byId.get(row.documentId);
+    const quote = row.quote.trim();
+    if (!document || !quote || !document.text.includes(quote)) return [];
+
     return [{
-      documentId: row.documentId,
-      fileName: typeof row.fileName === 'string' ? row.fileName : '',
+      documentId: document.id,
+      fileName: document.fileName,
       location: typeof row.location === 'string' ? row.location : 'document',
-      quote: row.quote,
+      quote,
       page: typeof row.page === 'string' ? row.page : undefined,
       section: typeof row.section === 'string' ? row.section : undefined,
       table: typeof row.table === 'string' ? row.table : undefined,
@@ -54,21 +61,21 @@ export async function askResearch(question: string, documentIds: string[]): Prom
   }
 
   const context = documents.map(document => [
-    `DOCUMENT ID: ${document.id}`,
-    `FILE: ${document.fileName}`,
+    'DOCUMENT ID: ' + document.id,
+    'FILE: ' + document.fileName,
     document.text.slice(0, 18000),
   ].join('\n')).join('\n\n');
 
-  const prompt = `You are a source-grounded academic research assistant.
-Use ONLY the supplied source documents.
-Never invent facts, citations, quotations, verification status, or source metadata.
-Distinguish evidence from interpretation and state uncertainty.
-Return JSON only with answer, evidence and uncertainties.
-Evidence objects must contain documentId, location and quote.
-QUESTION:\n${normalizedQuestion}\n\nSOURCE DOCUMENTS:\n${context}`;
+  const prompt = 'You are a source-grounded academic research assistant.\n' +
+    'Use ONLY the supplied source documents.\n' +
+    'Never invent facts, citations, quotations, verification status, or source metadata.\n' +
+    'Distinguish evidence from interpretation and state uncertainty.\n' +
+    'Return JSON only with answer, evidence and uncertainties.\n' +
+    'Evidence objects must contain documentId, location and quote.\n' +
+    'QUESTION:\n' + normalizedQuestion + '\n\nSOURCE DOCUMENTS:\n' + context;
 
   const response = await ai.models.generateContent({
-    model: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
+    model: process.env.GEMINI_MODEL || 'gemini-3.7-flash',
     contents: prompt,
     config: { responseMimeType: 'application/json' },
   });
@@ -86,10 +93,22 @@ QUESTION:\n${normalizedQuestion}\n\nSOURCE DOCUMENTS:\n${context}`;
   }
 
   const data = parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : {};
+  const evidence = normalizeEvidence(data.evidence, documents);
+  const answer = typeof data.answer === 'string' ? data.answer.trim() : '';
+
+  if (!answer || !evidence.length) {
+    return {
+      mode: 'fallback',
+      answer: 'AI-svaret kunne ikke knyttes til verifiserbare tekstutdrag i de valgte kildene og er derfor ikke brukt som kildegrunnlag.',
+      evidence: [],
+      uncertainties: ['AI response contained no verifiable source evidence'],
+    };
+  }
+
   return {
     mode: 'ai',
-    answer: typeof data.answer === 'string' ? data.answer : '',
-    evidence: normalizeEvidence(data.evidence),
+    answer,
+    evidence,
     uncertainties: Array.isArray(data.uncertainties)
       ? data.uncertainties.filter((item): item is string => typeof item === 'string')
       : ['AI response contained no structured uncertainty list'],
