@@ -95,10 +95,6 @@ export function createClaim(input: Omit<EvidenceClaim, 'id' | 'createdAt'>): Evi
   const documentId = typeof input.documentId === 'string' ? input.documentId.trim() : undefined;
   const quote = typeof input.quote === 'string' ? input.quote.trim() : undefined;
 
-  if (documentId && !documents.has(documentId)) {
-    throw new Error('claim references an unknown document');
-  }
-
   if (status === 'verified') {
     if (!documentId || !quote) throw new Error('verified claims require documentId and quote');
     const document = documents.get(documentId);
