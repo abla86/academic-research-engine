@@ -36,7 +36,7 @@ export async function extractText(filePath: string): Promise<ExtractedDocumentCo
   } else if (extension === '.pdf') {
     sourceType = 'pdf';
     const data = new Uint8Array(await fs.readFile(absolutePath));
-    const pdf = await getDocument({ data, disableWorker: true }).promise;
+    const pdf = await getDocument({ data }).promise;
     estimatedPages = Math.max(1, pdf.numPages);
     const pages: string[] = [];
 
@@ -63,7 +63,7 @@ export async function extractText(filePath: string): Promise<ExtractedDocumentCo
   }
 
   const normalized = text.replace(/\u0000/g, '').trim();
-  const wordCount = normalized ? normalized.split(/\s+/).filter(Boolean).length : 0;
+  const wordCount = normalized ? normalized.split(/\s+/).filter(Boolean).length;
   if (sourceType !== 'pdf') estimatedPages = Math.max(1, Math.ceil(wordCount / 500));
 
   return { sourceType, text: normalized, wordCount, estimatedPages, isScannedOrImageOnly, ocrNeeded };
