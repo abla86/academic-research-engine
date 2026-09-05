@@ -128,3 +128,42 @@ test(
     );
   }
 );
+
+
+test(
+  "document search returns only documents matching every query term",
+  () => {
+    const first = addDocument({
+      fileName: "first.txt",
+      mimeType: "text/plain",
+      sourceType: "txt",
+      text: "Person-centred care improves dementia care."
+    });
+    const second = addDocument({
+      fileName: "second.txt",
+      mimeType: "text/plain",
+      sourceType: "txt",
+      text: "Person-centred care is discussed here."
+    });
+
+    const results = searchDocuments("person-centred dementia", [first.id, second.id]);
+
+    assert.ok(results.length > 0);
+    assert.ok(results.every(result => result.documentId === first.id));
+  }
+);
+
+test(
+  "empty document text is rejected",
+  () => {
+    assert.throws(
+      () => addDocument({
+        fileName: "empty.txt",
+        mimeType: "text/plain",
+        sourceType: "txt",
+        text: "   "
+      }),
+      /Document text cannot be empty/
+    );
+  }
+);
