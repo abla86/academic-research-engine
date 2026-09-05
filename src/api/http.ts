@@ -1,28 +1,27 @@
-import express, { type Request, type Response } from 'express';
+import express from 'express';
 import cors from 'cors';
+import type { Request, Response, NextFunction } from 'express';
 
 import {
-  addDocument,
-  listDocuments,
-  getDocument,
-  searchDocuments,
-  createClaim,
-  listClaims,
-  verifyDocument,
-  setDocumentVerification,
+  addDocument, listDocuments, getDocument, searchDocuments, createClaim, listClaims,
+  verifyDocument, setDocumentVerification,
 } from '../services/workspace.js';
 import { apa7, vancouver, createCitationRecord } from '../services/citations.js';
 import { askResearch } from '../services/ai.js';
 import { extractText } from '../services/extractor.js';
 import { createEvidenceHandoff } from '../services/evidenceIntegration.js';
 
+const VERSION = '2.0.0';
+
+function allowedOrigins(): string[] {
+  return (process.env.ALLOWED_ORIGINS ?? '').split(',').map(origin => origin.trim()).filter(Boolean);
+}
+
 export function createResearchRouter() {
   const router = express.Router();
   router.use(express.json({ limit: '30mb' }));
 
-  router.get('/documents', (_req, res) => {
-    return res.json({ success: true, documents: listDocuments() });
-  });
+  router.get('/documents', (_req, res) => res.json({ success: true, documents: listDocuments() }));
 
   router.get('/documents/:id', (req, res) => {
     const document = getDocument(req.params.id);
@@ -36,10 +35,7 @@ export function createResearchRouter() {
       if (typeof fileName !== 'string' || !fileName.trim() || typeof text !== 'string' || !text.trim()) {
         return res.status(400).json({ success: false, error: 'fileName and text are required' });
       }
-      return res.status(201).json({
-        success: true,
-        document: addDocument({ fileName, mimeType, sourceType, text }),
-      });
+      return res.status(201).json({ success: true, document: addDocument({ fileName, mimeType, sourceType, text }) });
     } catch (error) {
       return res.status(400).json({ success: false, error: error instanceof Error ? error.message : 'Document error' });
     }
@@ -51,9 +47,7 @@ export function createResearchRouter() {
     const rawIds = req.query.documentIds;
     const documentIds = Array.isArray(rawIds)
       ? rawIds.map(String)
-      : typeof rawIds === 'string'
-        ? rawIds.split(',').map(item => item.trim()).filter(Boolean)
-        : undefined;
+      : typeof rawIds === 'string' ? rawIds.split(',').map(item => item.trim()).filter(Boolean) : undefined;
     return res.json({ success: true, results: searchDocuments(query, documentIds) });
   });
 
@@ -118,14 +112,15 @@ export function createResearchRouter() {
       }
       return res.json({ success: true, extracted: await extractText(req.body.filePath) });
     } catch (error) {
-      return res.status(400).json({ success: false, error: error instanceof Error ? error.message : 'Extraction failed' });
+      const message = error instanceof Error ? error.message : 'Extraction failed';
+      const status = message.includes('inside RESEARCH_DOCUMENT_ROOT') ? 400 : 422;
+      return res.status(status).json({ success: false, error: message });
     }
   });
 
   router.post('/handoff', (req, res) => {
     try {
-      const handoff = createEvidenceHandoff(req.body);
-      return res.json({ success: true, handoff });
+      return res.json({ success: true, handoff: createEvidenceHandoff(req.body) });
     } catch (error) {
       return res.status(400).json({ success: false, error: error instanceof Error ? error.message : 'Evidence handoff failed' });
     }
@@ -136,12 +131,27 @@ export function createResearchRouter() {
 
 export function createApp() {
   const app = express();
-  app.use(cors());
+  const origins = allowedOrigins();
+
+  app.disable('x-powered-by');
+  app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    next();
+  });
+  app.use(cors(origins.length ? { origin: origins } : { origin: false }));
+
   app.get('/health', (_req, res) => res.json({
     status: 'ok',
     service: 'academic-research-engine',
-    version: '1.0.0',
+    version: VERSION,
   }));
+
   app.use('/api/research', createResearchRouter());
+  app.use((_req, res) => res.status(404).json({ success: false, error: 'Route not found' }));
+  app.use((_error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    if (!res.headersSent) res.status(500).json({ success: false, error: 'Internal server error' });
+  });
+
   return app;
 }
