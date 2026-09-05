@@ -63,7 +63,7 @@ export async function extractText(filePath: string): Promise<ExtractedDocumentCo
   }
 
   const normalized = text.replace(/\u0000/g, '').trim();
-  const wordCount = normalized ? normalized.split(/\s+/).filter(Boolean).length;
+  const wordCount = normalized ? normalized.split(/\s+/).filter(Boolean).length : 0;
   if (sourceType !== 'pdf') estimatedPages = Math.max(1, Math.ceil(wordCount / 500));
 
   return { sourceType, text: normalized, wordCount, estimatedPages, isScannedOrImageOnly, ocrNeeded };
