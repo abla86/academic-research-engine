@@ -79,27 +79,28 @@ export function searchDocuments(query: string, documentIds?: string[]) {
     if (allowed && !allowed.has(document.id)) continue;
 
     const lower = document.text.toLowerCase();
-    for (const term of terms) {
-      let position = lower.indexOf(term);
-      let count = 0;
+    if (!terms.every(term => lower.includes(term))) continue;
 
-      while (position >= 0 && count < 10) {
-        const start = Math.max(0, position - 220);
-        const end = Math.min(document.text.length, position + 600);
-        const lineNumber = document.text.slice(0, position).split(/\r?\n/).length;
-        const estimatedPage = Math.max(1, Math.ceil(lineNumber / 40));
+    const primaryTerm = terms[0];
+    let position = lower.indexOf(primaryTerm);
+    let count = 0;
 
-        results.push({
-          documentId: document.id,
-          fileName: document.fileName,
-          location: `character:${position}`,
-          quote: document.text.slice(start, end),
-          page: String(estimatedPage),
-        });
+    while (position >= 0 && count < 10) {
+      const start = Math.max(0, position - 220);
+      const end = Math.min(document.text.length, position + 600);
+      const lineNumber = document.text.slice(0, position).split(/\r?\n/).length;
+      const estimatedPage = Math.max(1, Math.ceil(lineNumber / 40));
 
-        position = lower.indexOf(term, position + Math.max(1, term.length));
-        count += 1;
-      }
+      results.push({
+        documentId: document.id,
+        fileName: document.fileName,
+        location: `character:${position}`,
+        quote: document.text.slice(start, end),
+        page: String(estimatedPage),
+      });
+
+      position = lower.indexOf(primaryTerm, position + Math.max(1, primaryTerm.length));
+      count += 1;
     }
   }
 
