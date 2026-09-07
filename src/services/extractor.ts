@@ -38,7 +38,7 @@ export async function extractText(filePath: string): Promise<ExtractedDocumentCo
   } else if (extension === '.pdf') {
     sourceType = 'pdf';
     const data = new Uint8Array(await fs.readFile(absolutePath));
-    const pdf = await getDocument({ data, disableWorker: true }).promise;
+    const pdf = await getDocument({ data }).promise;
     estimatedPages = Math.max(1, pdf.numPages);
     const pages: string[] = [];
 
