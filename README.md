@@ -29,3 +29,6 @@ Open `http://localhost:4100`.
 
 ## Integration
 The same engine can be mounted into the Complete Evidence Appraisal Tool or other applications through the HTTP API or exported TypeScript services.
+## Quality gate
+
+The research workflow is designed around explicit stages: question, search, screening, appraisal, and synthesis. Public examples must use non-identifying demonstration data.
