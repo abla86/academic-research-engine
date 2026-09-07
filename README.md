@@ -34,3 +34,8 @@ The same engine can be mounted into the Complete Evidence Appraisal Tool or othe
 ## Quality gate
 
 The research workflow is designed around explicit stages: question, search, screening, appraisal, and synthesis. Public examples must use non-identifying demonstration data.
+
+
+## Verification
+
+The supported verification path is `npm install`, `npm run typecheck`, `npm test`, and `npm run build`. The interactive demonstrations in `docs/` use synthetic data only and are independent of production credentials.
