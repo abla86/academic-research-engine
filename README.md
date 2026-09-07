@@ -22,7 +22,9 @@ AI output is candidate output. It does not automatically establish truth, public
 ## Run
 ```powershell
 npm install
+npm run typecheck
 npm test
+npm run build
 npm start
 ```
 Open `http://localhost:4100`.
