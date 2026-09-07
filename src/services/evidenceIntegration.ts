@@ -2,9 +2,7 @@ import type { EvidenceHandoff as CanonicalEvidenceHandoff } from '../types/index
 
 export const EVIDENCE_HANDOFF_CONTRACT_VERSION = '1.0.0' as const;
 
-export type EvidenceHandoff = CanonicalEvidenceHandoff;
-
-export function createEvidenceHandoff(input: EvidenceHandoff): EvidenceHandoff {
+export function createEvidenceHandoff(input: CanonicalEvidenceHandoff): CanonicalEvidenceHandoff {
   if (input.contractVersion !== EVIDENCE_HANDOFF_CONTRACT_VERSION) {
     throw new Error(`Unsupported evidence handoff contract: ${input.contractVersion}`);
   }
@@ -27,7 +25,7 @@ export function buildEvidenceHandoff(
   document: CanonicalEvidenceHandoff['document'],
   evidence: CanonicalEvidenceHandoff['evidence'],
   citation?: CanonicalEvidenceHandoff['citation'],
-): EvidenceHandoff {
+): CanonicalEvidenceHandoff {
   return createEvidenceHandoff({
     contractVersion: EVIDENCE_HANDOFF_CONTRACT_VERSION,
     source: 'academic-research-engine',
