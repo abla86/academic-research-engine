@@ -14,7 +14,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: false
       - run: npm install
       - name: Verify package metadata
         run: node -e "const p=require('./package.json'); if(!p.scripts.build||!p.scripts.test||!p.scripts.typecheck) process.exit(1)"
