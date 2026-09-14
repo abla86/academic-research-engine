@@ -15,6 +15,9 @@
   },
   "homepage": "https://github.com/abla86/academic-research-engine",
   "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
   "publishConfig": {
     "access": "public"
   },
