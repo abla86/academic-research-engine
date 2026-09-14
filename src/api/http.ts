@@ -16,6 +16,10 @@ import { askResearch } from '../services/ai.js';
 import { extractText } from '../services/extractor.js';
 import { createEvidenceHandoff } from '../services/evidenceIntegration.js';
 
+const ALLOWED_EXTRACTION_ROOT = process.env.RESEARCH_UPLOAD_DIR
+  ? path.resolve(process.env.RESEARCH_UPLOAD_DIR)
+  : path.resolve(process.cwd(), 'uploads');
+
 export function createResearchRouter() {
   const router = express.Router();
   router.use(express.json({ limit: '30mb' }));
@@ -113,10 +117,15 @@ export function createResearchRouter() {
 
   router.post('/extract', async (req, res) => {
     try {
-      if (typeof req.body?.filePath !== 'string' || !req.body.filePath.trim()) {
+      const filePath = req.body?.filePath;
+      if (typeof filePath !== 'string' || !filePath.trim()) {
         return res.status(400).json({ success: false, error: 'filePath is required' });
       }
-      return res.json({ success: true, extracted: await extractText(req.body.filePath) });
+      const requestedPath = path.resolve(filePath);
+      if (requestedPath !== ALLOWED_EXTRACTION_ROOT && !requestedPath.startsWith(`${ALLOWED_EXTRACTION_ROOT}${path.sep}`)) {
+        return res.status(403).json({ success: false, error: 'filePath must be inside the configured research upload directory' });
+      }
+      return res.json({ success: true, extracted: await extractText(requestedPath) });
     } catch (error) {
       return res.status(400).json({ success: false, error: error instanceof Error ? error.message : 'Extraction failed' });
     }
@@ -136,7 +145,12 @@ export function createResearchRouter() {
 
 export function createApp() {
   const app = express();
-  app.use(cors());
+  const configuredOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:4100,http://localhost:5173')
+    .split(',')
+    .map(origin => origin.trim())
+    .filter(Boolean);
+
+  app.use(cors({ origin: configuredOrigins }));
   app.get('/health', (_req, res) => res.json({
     status: 'ok',
     service: 'academic-research-engine',
