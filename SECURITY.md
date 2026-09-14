@@ -1,21 +1,24 @@
 # Security Policy
 
-## Supported Versions
+## Supported versions
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+This project follows the `2.x` major version line. Security fixes are applied to the latest supported release on that line.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+| Version | Supported |
+| --- | --- |
+| 2.x | Yes |
+| < 2.0 | No |
 
-## Reporting a Vulnerability
+## Reporting a vulnerability
 
-Use this section to tell people how to report a vulnerability.
+Do not disclose security vulnerabilities in public issues.
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+Use GitHub's private security reporting mechanism for this repository when available. Include the affected version, a clear description of the issue, reproduction steps or a proof of concept, and the potential impact.
+
+If private security reporting is unavailable, contact the repository owner through their GitHub profile and do not publish sensitive exploit details until a fix or mitigation has been coordinated.
+
+## Scope
+
+Security reports are especially relevant to document ingestion, file-path handling, HTTP endpoints, authentication/authorization boundaries, dependency vulnerabilities, unsafe AI integration, and accidental exposure of research data or credentials.
+
+AI-generated output is treated as untrusted candidate content. It must not be used as an authorization or security decision without independent validation.
