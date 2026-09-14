@@ -1,5 +1,6 @@
-import express, { type Request, type Response } from 'express';
+import express from 'express';
 import cors from 'cors';
+import path from 'node:path';
 
 import {
   addDocument,
@@ -24,9 +25,7 @@ export function createResearchRouter() {
   const router = express.Router();
   router.use(express.json({ limit: '30mb' }));
 
-  router.get('/documents', (_req, res) => {
-    return res.json({ success: true, documents: listDocuments() });
-  });
+  router.get('/documents', (_req, res) => res.json({ success: true, documents: listDocuments() }));
 
   router.get('/documents/:id', (req, res) => {
     const document = getDocument(req.params.id);
@@ -40,10 +39,7 @@ export function createResearchRouter() {
       if (typeof fileName !== 'string' || !fileName.trim() || typeof text !== 'string' || !text.trim()) {
         return res.status(400).json({ success: false, error: 'fileName and text are required' });
       }
-      return res.status(201).json({
-        success: true,
-        document: addDocument({ fileName, mimeType, sourceType, text }),
-      });
+      return res.status(201).json({ success: true, document: addDocument({ fileName, mimeType, sourceType, text }) });
     } catch (error) {
       return res.status(400).json({ success: false, error: error instanceof Error ? error.message : 'Document error' });
     }
@@ -55,9 +51,7 @@ export function createResearchRouter() {
     const rawIds = req.query.documentIds;
     const documentIds = Array.isArray(rawIds)
       ? rawIds.map(String)
-      : typeof rawIds === 'string'
-        ? rawIds.split(',').map(item => item.trim()).filter(Boolean)
-        : undefined;
+      : typeof rawIds === 'string' ? rawIds.split(',').map(item => item.trim()).filter(Boolean) : undefined;
     return res.json({ success: true, results: searchDocuments(query, documentIds) });
   });
 
@@ -86,21 +80,15 @@ export function createResearchRouter() {
   });
 
   router.post('/claims', (req, res) => {
-    try {
-      return res.status(201).json({ success: true, claim: createClaim(req.body) });
-    } catch (error) {
-      return res.status(400).json({ success: false, error: error instanceof Error ? error.message : 'Claim error' });
-    }
+    try { return res.status(201).json({ success: true, claim: createClaim(req.body) }); }
+    catch (error) { return res.status(400).json({ success: false, error: error instanceof Error ? error.message : 'Claim error' }); }
   });
 
   router.get('/claims', (_req, res) => res.json({ success: true, claims: listClaims() }));
 
   router.post('/documents/:id/verify', (req, res) => {
-    try {
-      return res.json({ success: true, document: verifyDocument(req.params.id) });
-    } catch (error) {
-      return res.status(404).json({ success: false, error: error instanceof Error ? error.message : 'Document not found' });
-    }
+    try { return res.json({ success: true, document: verifyDocument(req.params.id) }); }
+    catch (error) { return res.status(404).json({ success: false, error: error instanceof Error ? error.message : 'Document not found' }); }
   });
 
   router.post('/documents/:id/verification', (req, res) => {
@@ -132,12 +120,8 @@ export function createResearchRouter() {
   });
 
   router.post('/handoff', (req, res) => {
-    try {
-      const handoff = createEvidenceHandoff(req.body);
-      return res.json({ success: true, handoff });
-    } catch (error) {
-      return res.status(400).json({ success: false, error: error instanceof Error ? error.message : 'Evidence handoff failed' });
-    }
+    try { return res.json({ success: true, handoff: createEvidenceHandoff(req.body) }); }
+    catch (error) { return res.status(400).json({ success: false, error: error instanceof Error ? error.message : 'Evidence handoff failed' }); }
   });
 
   return router;
@@ -146,16 +130,9 @@ export function createResearchRouter() {
 export function createApp() {
   const app = express();
   const configuredOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:4100,http://localhost:5173')
-    .split(',')
-    .map(origin => origin.trim())
-    .filter(Boolean);
-
+    .split(',').map(origin => origin.trim()).filter(Boolean);
   app.use(cors({ origin: configuredOrigins }));
-  app.get('/health', (_req, res) => res.json({
-    status: 'ok',
-    service: 'academic-research-engine',
-    version: '1.0.0',
-  }));
+  app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'academic-research-engine', version: '1.0.0' }));
   app.use('/api/research', createResearchRouter());
   return app;
 }
